@@ -1,0 +1,10 @@
+.git
+.gradle
+.kotlin
+.idea
+**/build
+.env
+.DS_Store
+__pycache__/
+
+.env.*

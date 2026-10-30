@@ -26,28 +26,35 @@ class EventService(
         val city = request.city.trim()
         val location = request.publicLocation.trim()
         val address = request.privateAddress?.trim()?.takeIf { it.isNotEmpty() }
-        if (title.length !in 3..120) throw ValidationException("Название: от 3 до 120 символов")
-        if (description.length !in 1..5000) throw ValidationException("Описание: от 1 до 5000 символов")
-        if (city.length !in 1..100) throw ValidationException("Город: от 1 до 100 символов")
-        if (location.length !in 1..300) throw ValidationException("Публичное место: от 1 до 300 символов")
+
+        requireValid(title.length in 3..120) { "Название: от 3 до 120 символов" }
+        requireValid(description.length in 1..5000) { "Описание: от 1 до 5000 символов" }
+        requireValid(city.length in 1..100)  { "Город: от 1 до 100 символов" }
+        requireValid(location.length in 1..300) { "Публичное место: от 1 до 300 символов" }
         if (address != null && address.length > 500) throw ValidationException("Адрес: максимум 500 символов")
-        if (!request.startsAt.isAfter(clock.instant())) throw ValidationException("Начало события должно быть в будущем")
-        if (request.capacity !in 1..100) throw ValidationException("Количество мест: от 1 до 100, без организатора")
+        requireValid(request.startsAt.isAfter(clock.instant())) { "Начало события должно быть в будущем" }
+        requireValid(request.capacity in 1..100) { "Количество мест: от 1 до 100, без организатора" }
+
         val event = Event(UUID.randomUUID(), organizerId, title, description, city, location, address,
             request.startsAt, request.capacity, EventStatus.ACTIVE, clock.instant())
+
         events.save(event)
         log.info("Event created: {}, organizer: {}", event.id, organizerId)
+
         return EventView.from(event, showAddress = true)
     }
 
     @Transactional(readOnly = true)
     fun list(city: String?, page: Int, size: Int): List<EventView> {
-        if (page !in 0..10000 || size !in 1..100) throw ValidationException("page: 0..10000, size: 1..100")
+        requireValid(page in 0..10000) { "page: от 0 до 10000" }
+        requireValid(size in 1..100) { "size: от 1 до 100" }
         if (city != null && city.length > 100) throw ValidationException("Слишком длинное название города")
+
         val filter = city?.trim()?.takeIf { it.isNotEmpty() }
         val pageable = PageRequest.of(page, size)
         val rows = if (filter == null) events.findUpcoming(EventStatus.ACTIVE, clock.instant(), pageable)
             else events.findUpcomingInCity(EventStatus.ACTIVE, clock.instant(), filter, pageable)
+
         return rows.map { EventView.from(it) }
     }
 
@@ -57,14 +64,17 @@ class EventService(
         val isOrganizer = viewerId == event.organizerId
         val isApproved = viewerId != null && event.status == EventStatus.ACTIVE &&
             applications.findByEventIdAndUserId(id, viewerId)?.status == ParticipationStatus.APPROVED
+
         return EventView.from(event, showAddress = isOrganizer || isApproved)
     }
 
     @Transactional
     fun cancel(id: UUID, actorId: UUID) {
         val event = lockEvent(id)
+
         requireOrganizer(event, actorId)
         requireOpen(event)
+
         event.status = EventStatus.CANCELLED
         log.info("Event cancelled: {}", id)
     }
@@ -72,12 +82,15 @@ class EventService(
     @Transactional
     fun apply(eventId: UUID, userId: UUID): Participation {
         val event = lockEvent(eventId)
+
         requireOpen(event)
         if (event.organizerId == userId) throw ConflictException("Организатор не подаёт заявку на своё событие")
         if (applications.findByEventIdAndUserId(eventId, userId) != null) throw ConflictException("Заявка уже существует")
+
         val application = Participation(UUID.randomUUID(), eventId, userId, ParticipationStatus.PENDING, clock.instant())
         applications.save(application)
         log.info("Application created: {}, event: {}", application.id, eventId)
+
         return application
     }
 
@@ -125,11 +138,20 @@ class EventService(
 
     private fun getEvent(id: UUID) = events.findById(id).orElseThrow { NotFoundException("Событие не найдено") }
     private fun lockEvent(id: UUID) = events.findForUpdate(id) ?: throw NotFoundException("Событие не найдено")
-    private fun requireOrganizer(event: Event, actorId: UUID) {
-        if (event.organizerId != actorId) throw ForbiddenException("Действие доступно только организатору")
-    }
-    private fun requireOpen(event: Event) {
-        if (event.status != EventStatus.ACTIVE) throw ConflictException("Событие отменено")
-        if (!event.startsAt.isAfter(clock.instant())) throw ConflictException("Событие уже началось")
+
+    private fun requireOrganizer(event: Event, actorId: UUID) =
+        if (event.organizerId != actorId) throw ForbiddenException("Действие доступно только организатору") else Unit
+
+    private fun requireOpen(event: Event) =
+        when {
+            event.status != EventStatus.ACTIVE -> throw ConflictException("Событие отменено")
+            !event.startsAt.isAfter(clock.instant()) -> throw ConflictException("Событие уже началось")
+            else -> Unit
+        }
+
+    private fun requireValid(condition: Boolean, message: () -> String){
+        if(!condition){
+            throw ValidationException(message())
+        }
     }
 }

@@ -16,6 +16,7 @@ import java.time.ZoneOffset
 import java.util.Optional
 import java.util.UUID
 
+//сделать мок класс и везде использовать
 class EventServiceTest {
     private val now = Instant.parse("2030-01-01T12:00:00Z")
     private val events = mock(EventRepository::class.java)
@@ -26,18 +27,6 @@ class EventServiceTest {
     private val event = Event(UUID.randomUUID(), owner, "Настолки", "Играем", "Москва", "Арбат",
         "Квартира 42", now.plusSeconds(3600), 1, EventStatus.ACTIVE, now)
     private val request = CreateEvent("Настолки", "Играем", "Москва", "Арбат", null, event.startsAt, 1)
-
-    private fun availableEvent() {
-        `when`(events.findForUpdate(event.id)).thenReturn(event)
-        `when`(events.findById(event.id)).thenReturn(Optional.of(event))
-    }
-
-    private fun application(userId: UUID = guest): Participation {
-        val value = Participation(UUID.randomUUID(), event.id, userId, ParticipationStatus.PENDING, now)
-        `when`(applications.findById(value.id)).thenReturn(Optional.of(value))
-        `when`(applications.findByEventIdAndUserId(event.id, userId)).thenReturn(value)
-        return value
-    }
 
     @Test
     fun `past start and invalid capacity are rejected`() {
@@ -116,5 +105,17 @@ class EventServiceTest {
     fun `invalid pagination is rejected`() {
         assertThrows(ValidationException::class.java) { service.list(null, -1, 20) }
         assertThrows(ValidationException::class.java) { service.list(null, 0, 101) }
+    }
+
+    private fun availableEvent() {
+        `when`(events.findForUpdate(event.id)).thenReturn(event)
+        `when`(events.findById(event.id)).thenReturn(Optional.of(event))
+    }
+
+    private fun application(userId: UUID = guest): Participation {
+        val value = Participation(UUID.randomUUID(), event.id, userId, ParticipationStatus.PENDING, now)
+        `when`(applications.findById(value.id)).thenReturn(Optional.of(value))
+        `when`(applications.findByEventIdAndUserId(event.id, userId)).thenReturn(value)
+        return value
     }
 }

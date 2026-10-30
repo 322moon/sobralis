@@ -42,18 +42,6 @@ class ServerTest {
     @Autowired lateinit var mapper: ObjectMapper
 
     private val password = "test-password-123"
-    private fun email() = "${UUID.randomUUID()}@example.com"
-    private fun account() = users.register(email(), "Участник", password)
-    private fun event(owner: UUID, capacity: Int = 1) = events.create(owner, CreateEvent("Настолки", "Играем вместе", "Москва",
-        "Арбат", "Секретная квартира 42", Instant.now().plusSeconds(86400), capacity))
-
-    private fun request(method: HttpMethod, path: String, body: Any? = null, email: String? = null, pass: String = password): ResponseEntity<JsonNode> {
-        val client = if (email == null) http else http.withBasicAuth(email, pass)
-        return client.exchange(path, method, HttpEntity(body, HttpHeaders().apply { contentType = MediaType.APPLICATION_JSON }), JsonNode::class.java)
-    }
-
-    private fun createBody() = mapOf("title" to "Встреча", "description" to "Играем в настолки", "city" to "Москва",
-        "publicLocation" to "Арбат", "privateAddress" to "Секретная квартира 42", "startsAt" to Instant.now().plusSeconds(86400).toString(), "capacity" to 1)
 
     @Test
     fun `full HTTP scenario checks identity privacy seats withdrawal and cancellation`() {
@@ -263,4 +251,20 @@ class ServerTest {
             registry.add("spring.datasource.password", postgres::getPassword)
         }
     }
+
+    private fun email() = "${UUID.randomUUID()}@example.com"
+
+    private fun account() = users.register(email(), "Участник", password)
+
+    private fun event(owner: UUID, capacity: Int = 1) = events.create(owner, CreateEvent("Настолки", "Играем вместе", "Москва",
+        "Арбат", "Секретная квартира 42", Instant.now().plusSeconds(86400), capacity))
+
+    private fun request(method: HttpMethod, path: String, body: Any? = null, email: String? = null, pass: String = password): ResponseEntity<JsonNode> {
+        val client = if (email == null) http else http.withBasicAuth(email, pass)
+        return client.exchange(path, method, HttpEntity(body, HttpHeaders().apply { contentType = MediaType.APPLICATION_JSON }), JsonNode::class.java)
+    }
+
+    private fun createBody() = mapOf("title" to "Встреча", "description" to "Играем в настолки", "city" to "Москва",
+        "publicLocation" to "Арбат", "privateAddress" to "Секретная квартира 42", "startsAt" to Instant.now().plusSeconds(86400).toString(), "capacity" to 1)
+
 }
